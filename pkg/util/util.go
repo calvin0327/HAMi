@@ -1,18 +1,18 @@
 /*
- * Copyright © 2021 peizhaoyou <peizhaoyou@4paradigm.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+Copyright 2024 The HAMi Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package util
 
@@ -24,21 +24,43 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Project-HAMi/HAMi/pkg/api"
 	"github.com/Project-HAMi/HAMi/pkg/util/client"
-	v1 "k8s.io/api/core/v1"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 )
 
-func GetNode(nodename string) (*v1.Node, error) {
+const (
+	// OneContainerMultiDeviceSplitSymbol this is when one container use multi device, use : symbol to join device info.
+	OneContainerMultiDeviceSplitSymbol = ":"
+
+	// OnePodMultiContainerSplitSymbol this is when one pod having multi container and more than one container use device, use ; symbol to join device info.
+	OnePodMultiContainerSplitSymbol = ";"
+)
+
+var (
+	InRequestDevices map[string]string
+	SupportDevices   map[string]string
+	HandshakeAnnos   map[string]string
+)
+
+func init() {
+	InRequestDevices = make(map[string]string)
+	SupportDevices = make(map[string]string)
+	HandshakeAnnos = make(map[string]string)
+}
+
+func GetNode(nodename string) (*corev1.Node, error) {
 	n, err := client.GetClient().CoreV1().Nodes().Get(context.Background(), nodename, metav1.GetOptions{})
 	return n, err
 }
 
-func GetPendingPod(node string) (*v1.Pod, error) {
+func GetPendingPod(node string) (*corev1.Pod, error) {
 	podlist, err := client.GetClient().CoreV1().Pods("").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -66,10 +88,10 @@ func GetPendingPod(node string) (*v1.Pod, error) {
 }
 
 func DecodeNodeDevices(str string) ([]*api.DeviceInfo, error) {
-	if !strings.Contains(str, ":") {
+	if !strings.Contains(str, OneContainerMultiDeviceSplitSymbol) {
 		return []*api.DeviceInfo{}, errors.New("node annotations not decode successfully")
 	}
-	tmp := strings.Split(str, ":")
+	tmp := strings.Split(str, OneContainerMultiDeviceSplitSymbol)
 	var retval []*api.DeviceInfo
 	for _, val := range tmp {
 		if strings.Contains(val, ",") {
@@ -101,7 +123,7 @@ func DecodeNodeDevices(str string) ([]*api.DeviceInfo, error) {
 func EncodeNodeDevices(dlist []*api.DeviceInfo) string {
 	tmp := ""
 	for _, val := range dlist {
-		tmp += val.Id + "," + strconv.FormatInt(int64(val.Count), 10) + "," + strconv.Itoa(int(val.Devmem)) + "," + strconv.Itoa(int(val.Devcore)) + "," + val.Type + "," + strconv.Itoa(val.Numa) + "," + strconv.FormatBool(val.Health) + ":"
+		tmp += val.Id + "," + strconv.FormatInt(int64(val.Count), 10) + "," + strconv.Itoa(int(val.Devmem)) + "," + strconv.Itoa(int(val.Devcore)) + "," + val.Type + "," + strconv.Itoa(val.Numa) + "," + strconv.FormatBool(val.Health) + OneContainerMultiDeviceSplitSymbol
 	}
 	klog.Infof("Encoded node Devices: %s", tmp)
 	return tmp
@@ -110,30 +132,53 @@ func EncodeNodeDevices(dlist []*api.DeviceInfo) string {
 func EncodeContainerDevices(cd ContainerDevices) string {
 	tmp := ""
 	for _, val := range cd {
-		tmp += val.UUID + "," + val.Type + "," + strconv.Itoa(int(val.Usedmem)) + "," + strconv.Itoa(int(val.Usedcores)) + ":"
+		tmp += val.UUID + "," + val.Type + "," + strconv.Itoa(int(val.Usedmem)) + "," + strconv.Itoa(int(val.Usedcores)) + OneContainerMultiDeviceSplitSymbol
 	}
 	klog.Infof("Encoded container Devices: %s", tmp)
 	return tmp
 	//return strings.Join(cd, ",")
 }
 
-func EncodePodDevices(pd PodDevices) string {
-	var ss []string
-	for _, cd := range pd {
-		ss = append(ss, EncodeContainerDevices(cd))
+func EncodeContainerDeviceType(cd ContainerDevices, t string) string {
+	tmp := ""
+	for _, val := range cd {
+		if strings.Compare(val.Type, t) == 0 {
+			tmp += val.UUID + "," + val.Type + "," + strconv.Itoa(int(val.Usedmem)) + "," + strconv.Itoa(int(val.Usedcores))
+		}
+		tmp += OneContainerMultiDeviceSplitSymbol
 	}
-	klog.Infof("Encoded pod Devices: %s", strings.Join(ss, ";"))
-	return strings.Join(ss, ";")
+	klog.Infof("Encoded container Certain Device type: %s->%s", t, tmp)
+	return tmp
+}
+
+func EncodePodSingleDevice(pd PodSingleDevice) string {
+	res := ""
+	for _, ctrdevs := range pd {
+		res = res + EncodeContainerDevices(ctrdevs)
+		res = res + OnePodMultiContainerSplitSymbol
+	}
+	klog.Infof("Encoded pod single devices %s", res)
+	return res
+}
+
+func EncodePodDevices(checklist map[string]string, pd PodDevices) map[string]string {
+	res := map[string]string{}
+	for devType, cd := range pd {
+		klog.Infoln("devtype=", devType)
+		res[checklist[devType]] = EncodePodSingleDevice(cd)
+	}
+	klog.Infof("Encoded pod Devices %s\n", res)
+	return res
 }
 
 func DecodeContainerDevices(str string) (ContainerDevices, error) {
 	if len(str) == 0 {
 		return ContainerDevices{}, nil
 	}
-	cd := strings.Split(str, ":")
+	cd := strings.Split(str, OneContainerMultiDeviceSplitSymbol)
 	contdev := ContainerDevices{}
 	tmpdev := ContainerDevice{}
-	klog.Infof("Start to decode container device %s", str)
+	klog.V(5).Infof("Start to decode container device %s", str)
 	if len(str) == 0 {
 		return ContainerDevices{}, nil
 	}
@@ -153,45 +198,55 @@ func DecodeContainerDevices(str string) (ContainerDevices, error) {
 			contdev = append(contdev, tmpdev)
 		}
 	}
-	klog.Infof("Finished decoding container devices. Total devices: %d", len(contdev))
+	klog.V(5).Infof("Finished decoding container devices. Total devices: %d", len(contdev))
 	return contdev, nil
 }
 
-func DecodePodDevices(str string) (PodDevices, error) {
-	if len(str) == 0 {
+func DecodePodDevices(checklist map[string]string, annos map[string]string) (PodDevices, error) {
+	klog.V(5).Infof("checklist is [%+v], annos is [%+v]", checklist, annos)
+	if len(annos) == 0 {
 		return PodDevices{}, nil
 	}
-	var pd PodDevices
-	for _, s := range strings.Split(str, ";") {
-		cd, err := DecodeContainerDevices(s)
-		if err != nil {
-			return PodDevices{}, nil
+	pd := make(PodDevices)
+	for devID, devs := range checklist {
+		str, ok := annos[devs]
+		if !ok {
+			continue
 		}
-		pd = append(pd, cd)
+		pd[devID] = make(PodSingleDevice, 0)
+		for _, s := range strings.Split(str, OnePodMultiContainerSplitSymbol) {
+			cd, err := DecodeContainerDevices(s)
+			if err != nil {
+				return PodDevices{}, nil
+			}
+			if len(cd) == 0 {
+				continue
+			}
+			pd[devID] = append(pd[devID], cd)
+		}
 	}
+	klog.InfoS("Decoded pod annos", "poddevices", pd)
 	return pd, nil
 }
 
-func GetNextDeviceRequest(dtype string, p v1.Pod) (v1.Container, ContainerDevices, error) {
-	pdevices, err := DecodePodDevices(p.Annotations[AssignedIDsToAllocateAnnotations])
+func GetNextDeviceRequest(dtype string, p corev1.Pod) (corev1.Container, ContainerDevices, error) {
+	pdevices, err := DecodePodDevices(InRequestDevices, p.Annotations)
 	if err != nil {
-		return v1.Container{}, ContainerDevices{}, err
+		return corev1.Container{}, ContainerDevices{}, err
 	}
-	klog.Infoln("pdevices=", pdevices)
+	klog.Infof("pod annotation decode vaule is %+v", pdevices)
 	res := ContainerDevices{}
-	for idx, val := range pdevices {
-		found := false
-		for _, dev := range val {
-			if strings.Compare(dtype, dev.Type) == 0 {
-				res = append(res, dev)
-				found = true
-			}
-		}
-		if found {
-			return p.Spec.Containers[idx], res, nil
+
+	pd, ok := pdevices[dtype]
+	if !ok {
+		return corev1.Container{}, res, errors.New("device request not found")
+	}
+	for ctridx, ctrDevice := range pd {
+		if len(ctrDevice) > 0 {
+			return p.Spec.Containers[ctridx], ctrDevice, nil
 		}
 	}
-	return v1.Container{}, res, errors.New("device request not found")
+	return corev1.Container{}, res, errors.New("device request not found")
 }
 
 func GetContainerDeviceStrArray(c ContainerDevices) []string {
@@ -202,41 +257,36 @@ func GetContainerDeviceStrArray(c ContainerDevices) []string {
 	return tmp
 }
 
-func EraseNextDeviceTypeFromAnnotation(dtype string, p v1.Pod) error {
-	pdevices, err := DecodePodDevices(p.Annotations[AssignedIDsToAllocateAnnotations])
+func EraseNextDeviceTypeFromAnnotation(dtype string, p corev1.Pod) error {
+	pdevices, err := DecodePodDevices(InRequestDevices, p.Annotations)
 	if err != nil {
 		return err
 	}
-	res := PodDevices{}
+	res := PodSingleDevice{}
+	pd, ok := pdevices[dtype]
+	if !ok {
+		return errors.New("erase device annotation not found")
+	}
 	found := false
-	for _, val := range pdevices {
+	for _, val := range pd {
 		if found {
 			res = append(res, val)
-			continue
 		} else {
-			tmp := ContainerDevices{}
-			for _, dev := range val {
-				klog.Infoln("Selecting erase res=", dtype, ":", dev.Type)
-				if strings.Compare(dtype, dev.Type) == 0 {
-					found = true
-				} else {
-					tmp = append(tmp, dev)
-				}
-			}
-			if !found {
-				res = append(res, val)
+			if len(val) > 0 {
+				found = true
+				res = append(res, ContainerDevices{})
 			} else {
-				res = append(res, tmp)
+				res = append(res, val)
 			}
 		}
 	}
 	klog.Infoln("After erase res=", res)
 	newannos := make(map[string]string)
-	newannos[AssignedIDsToAllocateAnnotations] = EncodePodDevices(res)
+	newannos[InRequestDevices[dtype]] = EncodePodSingleDevice(res)
 	return PatchPodAnnotations(&p, newannos)
 }
 
-func PatchNodeAnnotations(node *v1.Node, annotations map[string]string) error {
+func PatchNodeAnnotations(node *corev1.Node, annotations map[string]string) error {
 	type patchMetadata struct {
 		Annotations map[string]string `json:"annotations,omitempty"`
 	}
@@ -255,12 +305,13 @@ func PatchNodeAnnotations(node *v1.Node, annotations map[string]string) error {
 	_, err = client.GetClient().CoreV1().Nodes().
 		Patch(context.Background(), node.Name, k8stypes.StrategicMergePatchType, bytes, metav1.PatchOptions{})
 	if err != nil {
+		klog.Infoln("annotations=", annotations)
 		klog.Infof("patch pod %v failed, %v", node.Name, err)
 	}
 	return err
 }
 
-func PatchPodAnnotations(pod *v1.Pod, annotations map[string]string) error {
+func PatchPodAnnotations(pod *corev1.Pod, annotations map[string]string) error {
 	type patchMetadata struct {
 		Annotations map[string]string `json:"annotations,omitempty"`
 	}
@@ -276,21 +327,12 @@ func PatchPodAnnotations(pod *v1.Pod, annotations map[string]string) error {
 	if err != nil {
 		return err
 	}
+	klog.V(5).Infof("patch pod %s/%s annotation content is %s", pod.Namespace, pod.Name, string(bytes))
 	_, err = client.GetClient().CoreV1().Pods(pod.Namespace).
 		Patch(context.Background(), pod.Name, k8stypes.StrategicMergePatchType, bytes, metav1.PatchOptions{})
 	if err != nil {
 		klog.Infof("patch pod %v failed, %v", pod.Name, err)
 	}
-	/*
-		Can't modify Env of pods here
-
-		patch1 := addGPUIndexPatch()
-		_, err = s.kubeClient.CoreV1().Pods(pod.Namespace).
-			Patch(context.Background(), pod.Name, k8stypes.JSONPatchType, []byte(patch1), metav1.PatchOptions{})
-		if err != nil {
-			klog.Infof("Patch1 pod %v failed, %v", pod.Name, err)
-		}*/
-
 	return err
 }
 
@@ -300,4 +342,27 @@ func InitKlogFlags() *flag.FlagSet {
 	klog.InitFlags(flagset)
 
 	return flagset
+}
+
+func CheckHealth(devType string, n *corev1.Node) (bool, bool) {
+	handshake := n.Annotations[HandshakeAnnos[devType]]
+	if strings.Contains(handshake, "Requesting") {
+		formertime, _ := time.Parse("2006.01.02 15:04:05", strings.Split(handshake, "_")[1])
+		return time.Now().Before(formertime.Add(time.Second * 60)), false
+	} else if strings.Contains(handshake, "Deleted") {
+		return true, false
+	} else {
+		return true, true
+	}
+}
+
+func MarkAnnotationsToDelete(devType string, nn string) error {
+	tmppat := make(map[string]string)
+	tmppat[devType] = "Deleted_" + time.Now().Format("2006.01.02 15:04:05")
+	n, err := GetNode(nn)
+	if err != nil {
+		klog.Errorln("get node failed", err.Error())
+		return err
+	}
+	return PatchNodeAnnotations(n, tmppat)
 }

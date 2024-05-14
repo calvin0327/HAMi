@@ -1,9 +1,9 @@
-# Default values for 4pd-vgpu.
+# Default values for hami-vgpu.
 
 nameOverride: ""
 fullnameOverride: ""
-imagePullSecrets: []
-version: "v2.3.8"
+imagePullSecrets: [ ]
+version: "v2.3.11"
 
 #Nvidia GPU Parameters
 resourceName: "nvidia.com/gpu"
@@ -13,15 +13,25 @@ resourceCores: "nvidia.com/gpucores"
 resourcePriority: "nvidia.com/priority"
 
 #MLU Parameters
-mluResourceName: "cambricon.com/mlunum"
-mluResourceMem: "cambricon.com/mlumem"
+mluResourceName: "cambricon.com/vmlu"
+mluResourceMem: "cambricon.com/mlu.smlu.vmemory"
+mluResourceCores: "cambricon.com/mlu.smlu.vcore"
 
 #Hygon DCU Parameters
 dcuResourceName: "hygon.com/dcunum"
 dcuResourceMem: "hygon.com/dcumem"
 dcuResourceCores: "hygon.com/dcucores"
 
-schedulerName: "4pd-scheduler"
+#Iluvatar GPU Parameters
+iluvatarResourceName: "iluvatar.ai/vgpu"
+iluvatarResourceMem: "iluvatar.ai/vcuda-memory"
+iluvatarResourceCore: "iluvatar.ai/vcuda-core"
+
+#Ascend 910B Parameters
+ascendResourceName: "huawei.com/Ascend910"
+ascendResourceMem: "huawei.com/Ascend910-memory"
+
+schedulerName: "hami-scheduler"
 
 podSecurityPolicy:
   enabled: false
@@ -38,8 +48,12 @@ scheduler:
   nodeName: ""
   defaultMem: 0
   defaultCores: 0
+  defaultGPUNum: 1
   metricsBindAddress: ":9395"
+  leaderElect: true
   kubeScheduler:
+    # @param enabled indicate whether to run kube-scheduler container in the scheduler pod, it's true by default.
+    enabled: true
     imageTag: "v1.20.0"
     image: registry.cn-hangzhou.aliyuncs.com/google_containers/kube-scheduler
     imagePullPolicy: IfNotPresent
@@ -48,7 +62,6 @@ scheduler:
       - -v=4
     extraArgs:
       - --policy-config-file=/config/config.json
-      - --leader-elect=false
       - -v=4
   extender:
     image: "projecthami/hami"
@@ -60,7 +73,7 @@ scheduler:
   #nodeSelector: 
   #  gpu: "on"
   tolerations: []
-  #serviceAccountName: "4pd-vgpu-scheduler-sa"
+  #serviceAccountName: "hami-vgpu-scheduler-sa"
   customWebhook:
     enabled: false
     # must be an endpoint using https.

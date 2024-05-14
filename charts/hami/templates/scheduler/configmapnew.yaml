@@ -1,10 +1,11 @@
+{{- if .Values.scheduler.kubeScheduler.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "4pd-vgpu.scheduler" . }}-newversion
+  name: {{ include "hami-vgpu.scheduler" . }}-newversion
   labels:
-    app.kubernetes.io/component: 4pd-scheduler
-    {{- include "4pd-vgpu.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hami-scheduler
+    {{- include "hami-vgpu.labels" . | nindent 4 }}
 data:
   config.yaml: |
     {{- if gt (.Values.scheduler.kubeScheduler.imageTag | substr 3 5| atoi) 25}}
@@ -40,11 +41,16 @@ data:
         ignoredByScheduler: true
       - name: {{ .Values.mluResourceName }}
         ignoredByScheduler: true
-      - name: {{ .Values.mluResourceMem }}
-        ignoredByScheduler: true
       - name: {{ .Values.dcuResourceName }}
         ignoredByScheduler: true
       - name: {{ .Values.dcuResourceMem }}
         ignoredByScheduler: true
       - name: {{ .Values.dcuResourceCores }}
         ignoredByScheduler: true
+      - name: {{ .Values.iluvatarResourceName }}
+        ignoredByScheduler: true
+      - name: {{ .Values.ascendResourceMem }}
+        ignoredByScheduler: true
+      - name: {{ .Values.ascendResourceName }}
+        ignoredByScheduler: true
+{{- end }}

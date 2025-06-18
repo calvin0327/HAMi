@@ -8,7 +8,7 @@ metadata:
     {{- include "hami-vgpu.labels" . | nindent 4 }}
 data:
   config.yaml: |
-    {{- if gt (.Values.scheduler.kubeScheduler.imageTag | substr 3 5| atoi) 25}}
+    {{- if gt (.Values.scheduler.kubeScheduler.image.tag | substr 3 5| atoi) 25}}
     apiVersion: kubescheduler.config.k8s.io/v1
     {{- else }}
     apiVersion: kubescheduler.config.k8s.io/v1beta2

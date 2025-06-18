@@ -27,17 +27,17 @@ spec:
       annotations: {{ toYaml .Values.scheduler.podAnnotations | nindent 8 }}
       {{- end }}
     spec:
-      {{- include "hami-vgpu.imagePullSecrets" . | nindent 6}}
       serviceAccountName: {{ include "hami-vgpu.scheduler" . }}
       priorityClassName: system-node-critical
+      {{- include "hami.scheduler.extender.imagePullSecrets" . | nindent 6 }}
       containers:
       {{- if .Values.scheduler.kubeScheduler.enabled }}
         - name: kube-scheduler
-          image: {{ .Values.scheduler.kubeScheduler.image }}:{{ .Values.scheduler.kubeScheduler.imageTag }}
-          imagePullPolicy: {{ .Values.scheduler.kubeScheduler.imagePullPolicy | quote }}
+          image: {{ include "hami.scheduler.kubeScheduler.image" . }}
+          imagePullPolicy: {{ .Values.scheduler.kubeScheduler.image.pullPolicy }}
           command:
             - kube-scheduler
-            {{- if ge (.Values.scheduler.kubeScheduler.imageTag | substr 3 5| atoi) 22}}
+            {{- if ge (.Values.scheduler.kubeScheduler.image.tag | substr 3 5| atoi) 22}}
             {{- range .Values.scheduler.kubeScheduler.extraNewArgs }}
             - {{ . }}
             {{- end }}
@@ -55,8 +55,8 @@ spec:
               mountPath: /config
         {{- end }}      
         - name: vgpu-scheduler-extender
-          image: {{ .Values.scheduler.extender.image }}:{{ .Values.version }}
-          imagePullPolicy: {{ .Values.scheduler.extender.imagePullPolicy | quote }}
+          image: {{ include "hami.scheduler.extender.image" . }}
+          imagePullPolicy: {{ .Values.scheduler.extender.image.pullPolicy }}
           command:
             - scheduler
             - --resource-name={{ .Values.resourceName }}
@@ -98,7 +98,7 @@ spec:
         {{- if .Values.scheduler.kubeScheduler.enabled }}
         - name: scheduler-config
           configMap:
-            {{- if ge (.Values.scheduler.kubeScheduler.imageTag | substr 3 5| atoi) 22 }}
+            {{- if ge (.Values.scheduler.kubeScheduler.image.tag | substr 3 5| atoi) 22 }}
             name: {{ template "hami-vgpu.scheduler" . }}-newversion
             {{- else }}
             name: {{ template "hami-vgpu.scheduler" . }}

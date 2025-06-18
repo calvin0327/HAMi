@@ -26,15 +26,15 @@ spec:
       annotations: {{ toYaml .Values.devicePlugin.podAnnotations | nindent 8 }}
       {{- end }}
     spec:
-      {{- include "hami-vgpu.imagePullSecrets" . | nindent 6}}
       serviceAccountName: {{ include "hami-vgpu.device-plugin" . }}
       priorityClassName: system-node-critical
       hostPID: true
       hostNetwork: true
+      {{- include "hami.devicePlugin.hygon.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: dcu-device-plugin-ctr
-          image: {{ .Values.devicePlugin.hygonimage }}
-          imagePullPolicy: {{ .Values.devicePlugin.imagePullPolicy | quote }}
+          image: {{ include "hami.devicePlugin.hygon.image" . }}
+          imagePullPolicy: {{ .Values.devicePlugin.hygon.image.pullPolicy }}
           command: ["/hygon","-logtostderr=true","-stderrthreshold=INFO","-v=5"]
           env:
             - name: NODE_NAME
@@ -82,7 +82,7 @@ spec:
             path: /usr/share/hwdata
         - name: hygonloc
           hostPath:
-            path: {{ .Values.devicePlugin.hygondriver }}
+            path: {{ .Values.devicePlugin.hygon.driver }}
       {{- if .Values.devicePlugin.hygonnodeSelector }}
       nodeSelector: {{ toYaml .Values.devicePlugin.hygonnodeSelector | nindent 8 }}
       {{- end }}

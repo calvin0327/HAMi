@@ -1,9 +1,24 @@
 # Default values for hami-vgpu.
 
+## @section Global configuration
+## @param global.imageRegistry Global Docker image registry
+## @param global.imagePullSecrets Global Docker image pull secrets
+global:
+  ## @param global.imageRegistry Global Docker image registry
+  imageRegistry: ""
+  ## E.g.
+  ## imagePullSecrets:
+  ##   - myRegistryKeySecretName
+  ## @param global.imagePullSecrets Global Docker image pull secrets
+  imagePullSecrets: []
+  hami:
+    imageTag: "v2.6.0"
+  gpuHookPath: /usr/local
+  labels: {}
+  annotations: {}
+
 nameOverride: ""
 fullnameOverride: ""
-imagePullSecrets: [ ]
-version: "v2.3.11"
 
 #Nvidia GPU Parameters
 resourceName: "nvidia.com/gpu"
@@ -36,12 +51,62 @@ schedulerName: "hami-scheduler"
 podSecurityPolicy:
   enabled: false
 
-global:
-  gpuHookPath: /usr/local
-  labels: {}
-  annotations: {}
-
 scheduler:
+  extender:
+    ## @param image.registry scheduler extender image registry
+    ## @param image.repository scheduler extender image repository
+    ## @param image.tag scheduler extender image tag (immutable tags are recommended)
+    ## @param image.pullPolicy scheduler extender image pull policy
+    ## @param image.pullSecrets Specify docker-registry secret names as an array
+    image:
+      registry: "docker.io"
+      repository: "projecthami/hami"
+      tag: ""
+      ## Specify a imagePullPolicy
+      ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+      ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+      ##
+      pullPolicy: IfNotPresent
+      ## Optionally specify an array of imagePullSecrets.
+      ## Secrets must be manually created in the namespace.
+      ## Example:
+      ## pullSecrets:
+      ##   - myRegistryKeySecretName
+      ##
+      pullSecrets: []
+    extraArgs:
+      - --debug
+      - -v=4
+  kubeScheduler:
+    # @param enabled indicate whether to run kube-scheduler container in the scheduler pod, it's true by default.
+    enabled: true
+    ## @param image.registry kube scheduler image registry
+    ## @param image.repository kube scheduler image repository
+    ## @param image.tag kube scheduler image tag (immutable tags are recommended)
+    ## @param image.pullPolicy kube scheduler image pull policy
+    ## @param image.pullSecrets Specify docker-registry secret names as an array
+    image:
+      registry: "registry.cn-hangzhou.aliyuncs.com"
+      repository: "google_containers/kube-scheduler"
+      tag: "v1.20.0"
+      ## Specify a imagePullPolicy
+      ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+      ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+      ##
+      pullPolicy: IfNotPresent
+      ## Optionally specify an array of imagePullSecrets.
+      ## Secrets must be manually created in the namespace.
+      ## Example:
+      ## pullSecrets:
+      ##   - myRegistryKeySecretName
+      ##
+      pullSecrets: []
+    extraNewArgs:
+      - --config=/config/config.yaml
+      - -v=4
+    extraArgs:
+      - --policy-config-file=/config/config.json
+      - -v=4
   # @param nodeName defines the node name and the nvidia-vgpu-scheduler-scheduler will schedule to the node.
   # if we install the nvidia-vgpu-scheduler-scheduler as default scheduler, we need to remove the k8s defualt
   # scheduler pod from the cluster first, we must specified node name to skip the schedule workflow.
@@ -54,24 +119,6 @@ scheduler:
     gpuSchedulerPolicy: spread
   metricsBindAddress: ":9395"
   leaderElect: true
-  kubeScheduler:
-    # @param enabled indicate whether to run kube-scheduler container in the scheduler pod, it's true by default.
-    enabled: true
-    imageTag: "v1.20.0"
-    image: registry.cn-hangzhou.aliyuncs.com/google_containers/kube-scheduler
-    imagePullPolicy: IfNotPresent
-    extraNewArgs:
-      - --config=/config/config.yaml
-      - -v=4
-    extraArgs:
-      - --policy-config-file=/config/config.json
-      - -v=4
-  extender:
-    image: "projecthami/hami"
-    imagePullPolicy: IfNotPresent
-    extraArgs:
-      - --debug
-      - -v=4
   podAnnotations: {}
   #nodeSelector: 
   #  gpu: "on"
@@ -103,11 +150,50 @@ scheduler:
     annotations: {}
 
 devicePlugin:
-  image: "projecthami/hami"
-  
-  monitorimage: "projecthami/hami"
+  ## @param image.registry devicePlugin image registry
+  ## @param image.repository devicePlugin image repository
+  ## @param image.tag devicePlugin image tag (immutable tags are recommended)
+  ## @param image.pullPolicy devicePlugin image pull policy
+  ## @param image.pullSecrets Specify docker-registry secret names as an array
+  image:
+    registry: "docker.io"
+    repository: "projecthami/hami"
+    tag: ""
+    ## Specify a imagePullPolicy
+    ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+    ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+    ##
+    pullPolicy: IfNotPresent
+    ## Optionally specify an array of imagePullSecrets.
+    ## Secrets must be manually created in the namespace.
+    ## Example:
+    ## pullSecrets:
+    ##   - myRegistryKeySecretName
+    ##
+    pullSecrets: []
+  monitor:
+    ## @param image.registry monitor image registry
+    ## @param image.repository monitor image repository
+    ## @param image.tag monitor image tag (immutable tags are recommended)
+    ## @param image.pullPolicy monitor image pull policy
+    ## @param image.pullSecrets Specify docker-registry secret names as an array
+    image:
+      registry: "docker.io"
+      repository: "projecthami/hami"
+      tag: ""
+      ## Specify a imagePullPolicy
+      ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+      ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+      ##
+      pullPolicy: IfNotPresent
+      ## Optionally specify an array of imagePullSecrets.
+      ## Secrets must be manually created in the namespace.
+      ## Example:
+      ## pullSecrets:
+      ##   - myRegistryKeySecretName
+      ##
+      pullSecrets: []
   monitorctrPath: /usr/local/vgpu/containers
-  imagePullPolicy: IfNotPresent
   deviceSplitCount: 10
   deviceMemoryScaling: 1
   deviceCoreScaling: 1
@@ -117,9 +203,30 @@ devicePlugin:
   extraArgs:
     - -v=false
   
-  hygonimage: "4pdosc/vdcu-device-plugin:v1.0"
-  hygondriver: "/root/dcu-driver/dtk-22.10.1-vdcu"
-  
+  hygon:
+    ## @param image.registry hygon image registry
+    ## @param image.repository hygon image repository
+    ## @param image.tag hygon image tag (immutable tags are recommended)
+    ## @param image.pullPolicy hygon image pull policy
+    ## @param image.pullSecrets Specify docker-registry secret names as an array
+    image:
+      registry: ""
+      repository: "4pdosc/vdcu-device-plugin"
+      tag: "v1.0"
+      ## Specify a imagePullPolicy
+      ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+      ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+      ##
+      pullPolicy: IfNotPresent
+      ## Optionally specify an array of imagePullSecrets.
+      ## Secrets must be manually created in the namespace.
+      ## Example:
+      ## pullSecrets:
+      ##   - myRegistryKeySecretName
+      ##
+      pullSecrets: []
+    driver: "/root/dcu-driver/dtk-22.10.1-vdcu"
+
   service:
     httpPort: 31992
     
@@ -134,4 +241,3 @@ devicePlugin:
   hygonnodeSelector:
     dcu: "on"
   tolerations: []
-

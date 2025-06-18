@@ -79,9 +79,57 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Image registry secret name
+Return the proper image name
 */}}
-{{- define "hami-vgpu.imagePullSecrets" -}}
-imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 2 }}
-{{- end }}
+{{- define "hami.scheduler.extender.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.scheduler.extender.image "global" .Values.global "tag" .Values.global.hami) }}
+{{- end -}}
 
+{{/*
+Return the proper image name
+*/}}
+{{- define "hami.scheduler.kubeScheduler.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.scheduler.kubeScheduler.image "global" .Values.global) }}
+{{- end -}}
+
+{{/*
+Return the proper image name
+*/}}
+{{- define "hami.devicePlugin.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.devicePlugin.image "global" .Values.global "tag" .Values.global.hami) }}
+{{- end -}}
+
+{{/*
+Return the proper image name
+*/}}
+{{- define "hami.devicePlugin.monitor.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.devicePlugin.monitor.image "global" .Values.global "tag" .Values.global.hami) }}
+{{- end -}}
+
+{{/*
+Return the proper image name
+*/}}
+{{- define "hami.devicePlugin.hygon.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.devicePlugin.hygon.image "global" .Values.global) }}
+{{- end -}}
+
+{{/*
+Return the proper image Registry Secret Names
+*/}}
+{{- define "hami.scheduler.extender.imagePullSecrets" -}}
+{{ include "common.images.pullSecrets" (dict "images" (list .Values.scheduler.extender.image) "global" .Values.global) }}
+{{- end -}}
+
+{{/*
+Return the proper image Registry Secret Names
+*/}}
+{{- define "hami.devicePlugin.imagePullSecrets" -}}
+{{ include "common.images.pullSecrets" (dict "images" (list .Values.devicePlugin.image) "global" .Values.global) }}
+{{- end -}}
+
+{{/*
+Return the proper image Registry Secret Names
+*/}}
+{{- define "hami.devicePlugin.hygon.imagePullSecrets" -}}
+{{ include "common.images.pullSecrets" (dict "images" (list .Values.devicePlugin.hygon.image) "global" .Values.global) }}
+{{- end -}}
